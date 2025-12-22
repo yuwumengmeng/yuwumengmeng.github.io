@@ -1,0 +1,298 @@
+<!DOCTYPE html><html lang="en" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>SqlAgent V3 架构设计文档 (Self-Correction) | Welcom to My Blog</title><meta name="author" content="Yuwumengmeng"><meta name="copyright" content="Yuwumengmeng"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1. 设计目标 (Design Goal)在 V2 实现高精度混合检索的基础上，V3 版本 (Self-Correction) 的核心目标是提升 Agent 的 鲁棒性 (Robustness) 和 成功率 (Success Rate)。  核心痛点：V2 版本是单向线性流程。如果生成的 SQL 有语法错误（如字段拼写错误）或逻辑错误（如 Group By 缺失），执行节点会直接抛出异常，导致任务">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SqlAgent V3 架构设计文档 (Self-Correction)">
+<meta property="og:url" content="http://yuwumengmeng.github.io/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/index.html">
+<meta property="og:site_name" content="Welcom to My Blog">
+<meta property="og:description" content="1. 设计目标 (Design Goal)在 V2 实现高精度混合检索的基础上，V3 版本 (Self-Correction) 的核心目标是提升 Agent 的 鲁棒性 (Robustness) 和 成功率 (Success Rate)。  核心痛点：V2 版本是单向线性流程。如果生成的 SQL 有语法错误（如字段拼写错误）或逻辑错误（如 Group By 缺失），执行节点会直接抛出异常，导致任务">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://yuwumengmeng.github.io/img/butterfly-icon.png">
+<meta property="article:published_time" content="2025-12-22T06:00:00.000Z">
+<meta property="article:modified_time" content="2025-12-22T03:42:19.415Z">
+<meta property="article:author" content="Yuwumengmeng">
+<meta property="article:tag" content="AI Agent">
+<meta property="article:tag" content="Architecture">
+<meta property="article:tag" content="LangGraph">
+<meta property="article:tag" content="SQLGlot">
+<meta property="article:tag" content="Self-Correction">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yuwumengmeng.github.io/img/butterfly-icon.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "SqlAgent V3 架构设计文档 (Self-Correction)",
+  "url": "http://yuwumengmeng.github.io/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/",
+  "image": "http://yuwumengmeng.github.io/img/butterfly-icon.png",
+  "datePublished": "2025-12-22T06:00:00.000Z",
+  "dateModified": "2025-12-22T03:42:19.415Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Yuwumengmeng",
+      "url": "http://yuwumengmeng.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="http://yuwumengmeng.github.io/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: 'Copy Successful',
+    error: 'Copy Failed',
+    noSupport: 'Browser Not Supported'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: 'Just now',
+    min: 'minutes ago',
+    hour: 'hours ago',
+    day: 'days ago',
+    month: 'months ago'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: 'Load More'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'SqlAgent V3 架构设计文档 (Self-Correction)',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.1"></head><body><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Welcom to My Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">SqlAgent V3 架构设计文档 (Self-Correction)</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  Back to Home</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">SqlAgent V3 架构设计文档 (Self-Correction)</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">Created</span><time class="post-meta-date-created" datetime="2025-12-22T06:00:00.000Z" title="Created 2025-12-22 14:00:00">2025-12-22</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">Updated</span><time class="post-meta-date-updated" datetime="2025-12-22T03:42:19.415Z" title="Updated 2025-12-22 11:42:19">2025-12-22</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Project-Documentation/">Project Documentation</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">Post Views:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="1-设计目标-Design-Goal"><a href="#1-设计目标-Design-Goal" class="headerlink" title="1. 设计目标 (Design Goal)"></a>1. 设计目标 (Design Goal)</h2><p>在 V2 实现高精度混合检索的基础上，<strong>V3 版本 (Self-Correction)</strong> 的核心目标是提升 Agent 的 <strong>鲁棒性 (Robustness)</strong> 和 <strong>成功率 (Success Rate)</strong>。</p>
+<ul>
+<li><strong>核心痛点</strong>：V2 版本是单向线性流程。如果生成的 SQL 有语法错误（如字段拼写错误）或逻辑错误（如 Group By 缺失），执行节点会直接抛出异常，导致任务失败。</li>
+<li><strong>核心功能</strong>：引入 <strong>“Execute -&gt; Evaluate -&gt; Fix -&gt; Retry”</strong> 的闭环机制。当 SQL 执行失败时，Agent 能自动读取数据库的报错信息，分析原因并修正 SQL，直至执行成功或达到最大重试次数。</li>
+<li><strong>架构变更</strong>：<ul>
+<li>图结构从 DAG (有向无环图) 变为 <strong>Cyclic Graph (有环图)</strong>。</li>
+<li>引入 <strong>SQL Validator</strong> (基于 AST 的静态检查) 和 <strong>Fix Node</strong> (基于 LLM 的动态修复)。</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-系统上下文-System-Context"><a href="#2-系统上下文-System-Context" class="headerlink" title="2. 系统上下文 (System Context)"></a>2. 系统上下文 (System Context)</h2><p>V3 在在线服务层引入了新的 <strong>Loop (循环)</strong> 机制。</p>
+<figure id="yunxingshi" class="fig">
+<img src="/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/%E7%B3%BB%E7%BB%9F%E4%B8%8A%E4%B8%8B%E6%96%87.png" class="" title="系统上下文">
+<figcaption>图：系统上下文</figcaption>
+</figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">!theme plain</span><br><span class="line">left to right direction</span><br><span class="line">skinparam dpi 300</span><br><span class="line"></span><br><span class="line">actor &quot;User&quot; as User</span><br><span class="line">component &quot;SqlAgent Service&quot; as App &#123;</span><br><span class="line">    component &quot;Workflow Engine\n(LangGraph)&quot; as Graph</span><br><span class="line">    component &quot;Hybrid Retriever\n(V2)&quot; as Retriever</span><br><span class="line">    component &quot;SQL Validator\n(New)&quot; as Validator</span><br><span class="line">    component &quot;Error Analyzer\n(New)&quot; as Fixer</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">database &quot;MySQL&quot; as DB</span><br><span class="line">cloud &quot;Aliyun Qwen&quot; as LLM</span><br><span class="line"></span><br><span class="line">User --&gt; App : Query</span><br><span class="line">App --&gt; Retriever : 1. Get Schema</span><br><span class="line">Retriever --&gt; LLM : 2. Generate SQL</span><br><span class="line"></span><br><span class="line">group Self-Correction Loop</span><br><span class="line">    LLM --&gt; Validator : 3. Static Check (AST)</span><br><span class="line">    Validator --&gt; DB : 4. Execute</span><br><span class="line">    DB --&gt; Fixer : 5. Error Message (if fail)</span><br><span class="line">    Fixer --&gt; LLM : 6. Fix Instruction</span><br><span class="line">    LLM --&gt; Validator : 7. Regenerate SQL</span><br><span class="line">end</span><br><span class="line"></span><br><span class="line">App --&gt; User : Result</span><br><span class="line">@enduml</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h2 id="3-核心状态定义-Agent-State-Definition"><a href="#3-核心状态定义-Agent-State-Definition" class="headerlink" title="3. 核心状态定义 (Agent State Definition)"></a>3. 核心状态定义 (Agent State Definition)</h2><p>为了支持“重试”和“错误追踪”，State 需要新增错误上下文和计数器。</p>
+<table>
+<thead>
+<tr>
+<th>字段名 (Field)</th>
+<th>类型 (Type)</th>
+<th>描述 (Description)</th>
+<th>更新来源节点</th>
+<th>V3 新增</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>user_query</code></td>
+<td><code>str</code></td>
+<td>用户原始问题</td>
+<td>Input</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>retrieved_schemas</code></td>
+<td><code>str</code></td>
+<td>RAG 检索到的 DDL</td>
+<td>Retrieve Node</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>generated_sql</code></td>
+<td><code>str</code></td>
+<td>当前生成的 SQL</td>
+<td>Generate&#x2F;Fix Node</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>sql_result</code></td>
+<td><code>List[Dict]</code></td>
+<td>执行结果</td>
+<td>Execute Node</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>error_message</code></td>
+<td><code>str</code></td>
+<td><strong>最近一次执行的报错信息</strong></td>
+<td>Execute Node</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>retry_count</code></td>
+<td><code>int</code></td>
+<td><strong>当前重试次数</strong></td>
+<td>Fix Node</td>
+<td>✅</td>
+</tr>
+</tbody></table>
+<h2 id="4-图结构拓扑-Graph-Topology"><a href="#4-图结构拓扑-Graph-Topology" class="headerlink" title="4. 图结构拓扑 (Graph Topology)"></a>4. 图结构拓扑 (Graph Topology)</h2><p>这是 V3 最显著的变化。我们在 <code>Execute Node</code> 之后引入了 <strong>Conditional Edge (条件边)</strong>。</p>
+<figure id="tujiegou_v3" class="fig">
+<img src="/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/%E5%9B%BE%E7%BB%93%E6%9E%84%E6%8B%93%E6%89%91.png" class="" title="V3 图结构拓扑图">
+<figcaption>图：V3 自愈合循环流程</figcaption>
+</figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">skinparam dpi 300</span><br><span class="line">&#x27; left to right direction</span><br><span class="line"></span><br><span class="line">state &quot;Start&quot; as Start</span><br><span class="line">state &quot;End&quot; as End</span><br><span class="line"></span><br><span class="line">state &quot;&lt;b&gt;Retrieve Node&lt;/b&gt;\n(V2 Hybrid RAG)&quot; as Retrieve</span><br><span class="line">state &quot;&lt;b&gt;Generate Node&lt;/b&gt;\n(Initial SQL)&quot; as Generate</span><br><span class="line">state &quot;&lt;b&gt;Execute Node&lt;/b&gt;\n(Run &amp; Catch Error)&quot; as Execute</span><br><span class="line"></span><br><span class="line">state &quot;&lt;b&gt;Fix Node&lt;/b&gt;\n(Analyze &amp; Rewrite)&quot; as Fix : &lt;b&gt;Input&lt;/b&gt;: Wrong SQL + Error Msg\n&lt;b&gt;Output&lt;/b&gt;: New SQL\n&lt;b&gt;Logic&lt;/b&gt;: retry_count++</span><br><span class="line"></span><br><span class="line">Start --&gt; Retrieve</span><br><span class="line">Retrieve --&gt; Generate</span><br><span class="line">Generate --&gt; Execute</span><br><span class="line"></span><br><span class="line">&#x27; 条件分支</span><br><span class="line">state c1 &lt;&lt;choice&gt;&gt;</span><br><span class="line">Execute --&gt; c1 : Check Result</span><br><span class="line"></span><br><span class="line">c1 --&gt; End : Success</span><br><span class="line">c1 --&gt; Fix : Error &amp; (retry &lt; 3)</span><br><span class="line">c1 --&gt; End : Error &amp; (retry &gt;= 3)</span><br><span class="line"></span><br><span class="line">&#x27; 循环闭环</span><br><span class="line">Fix --&gt; Execute : Retry</span><br><span class="line"></span><br><span class="line">note right of Fix</span><br><span class="line">  &lt;b&gt;自愈核心:&lt;/b&gt;</span><br><span class="line">  将报错信息(如 Column not found)</span><br><span class="line">  反馈给 LLM，让其重写 SQL。</span><br><span class="line">end note</span><br><span class="line"></span><br><span class="line">@enduml</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h2 id="5-运行时序-Runtime-Sequence"><a href="#5-运行时序-Runtime-Sequence" class="headerlink" title="5. 运行时序 (Runtime Sequence)"></a>5. 运行时序 (Runtime Sequence)</h2><p>展示一次失败后修正成功的场景。</p>
+<figure id="yunxingshi" class="fig">
+<img src="/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/%E8%BF%90%E8%A1%8C%E6%97%B6%E5%BA%8F%E5%9B%BE.png" class="" title="运行时序图">
+<figcaption>图：运行时序图</figcaption>
+</figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">@startuml</span><br><span class="line">skinparam dpi 300</span><br><span class="line">autonumber</span><br><span class="line"></span><br><span class="line">actor &quot;User&quot; as User</span><br><span class="line">box &quot;SqlAgent V3&quot; #f9f9f9</span><br><span class="line">    participant &quot;Graph&quot; as Graph</span><br><span class="line">    participant &quot;Generator&quot; as Gen</span><br><span class="line">    participant &quot;Executor&quot; as Exec</span><br><span class="line">    participant &quot;Fixer&quot; as Fix</span><br><span class="line">end box</span><br><span class="line">database &quot;MySQL&quot; as DB</span><br><span class="line"></span><br><span class="line">User -&gt; Graph : &quot;查询 emplyees 表人数&quot; (拼写错误)</span><br><span class="line"></span><br><span class="line">Graph -&gt; Gen : Generate SQL</span><br><span class="line">Gen --&gt; Graph : &quot;SELECT count(*) FROM emplyees&quot; (错误 SQL)</span><br><span class="line"></span><br><span class="line">Graph -&gt; Exec : Execute SQL</span><br><span class="line">activate Exec</span><br><span class="line">Exec -&gt; DB : Run SQL</span><br><span class="line">DB --&gt; Exec : Error: Table &#x27;emplyees&#x27; doesn&#x27;t exist</span><br><span class="line">Exec --&gt; Graph : Update state: error=&quot;Table doesn&#x27;t exist&quot;</span><br><span class="line">deactivate Exec</span><br><span class="line"></span><br><span class="line">group Self-Correction Loop</span><br><span class="line">    Graph -&gt; Graph : Conditional Check (Has Error?)</span><br><span class="line">    Graph -&gt; Fix : Trigger Fix Node</span><br><span class="line">    </span><br><span class="line">    Fix -&gt; Fix : Analyze Error\n(Find similar table &#x27;employees&#x27;)</span><br><span class="line">    Fix -&gt; Fix : Regenerate SQL</span><br><span class="line">    Fix --&gt; Graph : &quot;SELECT count(*) FROM employees&quot; (修正后)</span><br><span class="line">    </span><br><span class="line">    Graph -&gt; Exec : Retry Execute</span><br><span class="line">    Exec -&gt; DB : Run SQL</span><br><span class="line">    DB --&gt; Exec : Result: 8</span><br><span class="line">    Exec --&gt; Graph : Update state: result=8, error=None</span><br><span class="line">end</span><br><span class="line"></span><br><span class="line">Graph --&gt; User : Return 8</span><br><span class="line">@enduml</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h2 id="6-关键技术决策-Key-Decisions"><a href="#6-关键技术决策-Key-Decisions" class="headerlink" title="6. 关键技术决策 (Key Decisions)"></a>6. 关键技术决策 (Key Decisions)</h2><h3 id="6-1-两级纠错策略-Two-Level-Correction"><a href="#6-1-两级纠错策略-Two-Level-Correction" class="headerlink" title="6.1 两级纠错策略 (Two-Level Correction)"></a>6.1 两级纠错策略 (Two-Level Correction)</h3><ul>
+<li><p><strong>Level 1: 静态语法检查 (AST Validation)</strong></p>
+</li>
+<li><p><strong>工具</strong>: 使用 <code>sqlglot</code> 库。</p>
+</li>
+<li><p><strong>时机</strong>: 在 SQL 生成后，执行前。</p>
+</li>
+<li><p><strong>作用</strong>: 检查基本的 SQL 语法错误（如括号不匹配、关键字拼写错误），无需连接数据库，速度快。</p>
+</li>
+<li><p><em>注: 由于 AST 解析无法校验表名是否存在（需要连库），所以只能作为第一道防线。</em></p>
+</li>
+<li><p><strong>Level 2: 运行时动态修复 (Runtime Reflection)</strong></p>
+</li>
+<li><p><strong>工具</strong>: LLM (Qwen)。</p>
+</li>
+<li><p><strong>时机</strong>: 数据库执行报错后。</p>
+</li>
+<li><p><strong>Prompt</strong>: <code>User Query: &#123;query&#125; \n Wrong SQL: &#123;sql&#125; \n Error: &#123;error&#125; \n Fix the SQL.</code></p>
+</li>
+<li><p><strong>作用</strong>: 解决“表名&#x2F;字段名不存在”、“Group By 逻辑错误”等运行时问题。</p>
+</li>
+</ul>
+<h3 id="6-2-循环控制-Loop-Control"><a href="#6-2-循环控制-Loop-Control" class="headerlink" title="6.2 循环控制 (Loop Control)"></a>6.2 循环控制 (Loop Control)</h3><ul>
+<li><strong>决策</strong>: 设定硬性 <code>MAX_RETRIES = 3</code>。</li>
+<li><strong>理由</strong>: 防止 Agent 陷入死循环（如一直修不好，反复消耗 Token）。超过 3 次仍失败，则向用户抛出最终错误，并建议人工介入。</li>
+</ul>
+<h2 id="7-接口定义-API-Interface"><a href="#7-接口定义-API-Interface" class="headerlink" title="7. 接口定义 (API Interface)"></a>7. 接口定义 (API Interface)</h2><p>保持接口不变，但在 Response 中增加 <code>trace</code> 信息（可选），告知用户 Agent 是否进行了自我修正。</p>
+<p><strong>Response Update:</strong></p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;sql&quot;</span><span class="punctuation">:</span> <span class="string">&quot;SELECT ...&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;result&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span>...<span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;trace&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;correction_occured&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;retry_count&quot;</span><span class="punctuation">:</span> <span class="number">1</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;original_error&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Table &#x27;emplyees&#x27; doesn&#x27;t exist&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h2 id="8-开发计划-Implementation-Plan"><a href="#8-开发计划-Implementation-Plan" class="headerlink" title="8. 开发计划 (Implementation Plan)"></a>8. 开发计划 (Implementation Plan)</h2><h3 id="Phase-3-1-基础设施-Infrastructure"><a href="#Phase-3-1-基础设施-Infrastructure" class="headerlink" title="Phase 3.1: 基础设施 (Infrastructure)"></a>Phase 3.1: 基础设施 (Infrastructure)</h3><ul>
+<li><input disabled="" type="checkbox"> 引入 <code>sqlglot</code> 依赖。</li>
+<li><input disabled="" type="checkbox"> 编写 <code>app/db/validator.py</code>: 实现 SQL 静态语法检查。</li>
+</ul>
+<h3 id="Phase-3-2-节点开发-Node-Development"><a href="#Phase-3-2-节点开发-Node-Development" class="headerlink" title="Phase 3.2: 节点开发 (Node Development)"></a>Phase 3.2: 节点开发 (Node Development)</h3><ul>
+<li><input disabled="" type="checkbox"> 编写 <code>app/agent/nodes/fix.py</code>: 实现错误分析与重写逻辑。</li>
+<li><input disabled="" type="checkbox"> 改造 <code>app/agent/nodes/execute.py</code>: 捕获异常而不是直接抛出，将异常写入 State。</li>
+</ul>
+<h3 id="Phase-3-3-图编排-Graph-Orchestration"><a href="#Phase-3-3-图编排-Graph-Orchestration" class="headerlink" title="Phase 3.3: 图编排 (Graph Orchestration)"></a>Phase 3.3: 图编排 (Graph Orchestration)</h3><ul>
+<li><input disabled="" type="checkbox"> 改造 <code>app/agent/graph.py</code>:</li>
+<li>引入 <code>Fix Node</code>。</li>
+<li>添加 <code>should_continue</code> 条件边逻辑。</li>
+<li>配置 Compile Checkpointer (为未来 Memory 做准备)。</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>Author: </span><span class="post-copyright-info"><a href="http://yuwumengmeng.github.io">Yuwumengmeng</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>Link: </span><span class="post-copyright-info"><a href="http://yuwumengmeng.github.io/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">http://yuwumengmeng.github.io/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>Copyright Notice: </span><span class="post-copyright-info">All articles on this blog are licensed under <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> unless otherwise stated.</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/Architecture/">Architecture</a><a class="post-meta__tags" href="/tags/AI-Agent/">AI Agent</a><a class="post-meta__tags" href="/tags/LangGraph/">LangGraph</a><a class="post-meta__tags" href="/tags/Self-Correction/">Self-Correction</a><a class="post-meta__tags" href="/tags/SQLGlot/">SQLGlot</a></div><div class="post-share"><div class="social-share" data-image="/img/butterfly-icon.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2025/12/22/SqlAgent%20V2%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/" title="SqlAgent V2 架构设计文档 (Hybrid RAG)"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">Next</div><div class="info-item-2">SqlAgent V2 架构设计文档 (Hybrid RAG)</div></div><div class="info-2"><div class="info-item-1">1. 设计目标 (Design Goal)在 V1 版本跑通线性链路的基础上，V2 版本 (Hybrid RAG) 旨在解决大规模数据库场景下的 Context Window 瓶颈、语义理解不足 以及 跨语言检索 问题。  核心功能：构建 “Translation -&gt; Hybrid Search -&gt; Rerank” 的高精度检索漏斗。 架构验证：验证 Qdrant (Vector) + BM25 (Keyword) + DashScope Rerank 组合在 Text-to-SQL 场景下的召回效果。 非功能目标：在 500+ 张表规模下，实现 Recall@5 &gt; 95%，支持中文自然语言查询英文表结构。  2. 系统上下文 (System Context)V2 版本引入了 知识入库 (Ingestion) 离线流程，并在线上服务中集成了 Embedding Model 和 Rerank Model 两个外部原子能力。   图：V2 混合检索流程图   123456789101112131415161718192021222324252627282930...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>Related Articles</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2025/12/01/SqlAgent%20V1%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/" title="SqlAgent V1 架构设计文档"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-12-01</div><div class="info-item-2">SqlAgent V1 架构设计文档</div></div><div class="info-2"><div class="info-item-1">1. 设计目标 (Design Goal)本项目（SqlAgent）旨在构建一个基于大模型（LLM）的 Text-to-SQL 智能体。V1 版本 (MVP) 的核心目标是验证基于 Python 异步生态 的线性链路可行性，重点跑通数据流，为后续引入 RAG 和自愈合机制打下基础。  核心功能：实现“自然语言 -&gt; Schema 提取 -&gt; SQL 生成 -&gt; 数据库执行 -&gt; 返回结果”的端到端单轮对话。 架构验证：验证 SQLAlchemy 的 Schema 动态反射能力以及 LangGraph 的基础状态流转机制。 非功能目标：确保系统具备基础的安全性（只读账号&#x2F;Limit行数限制）和高并发下的异步 I&#x2F;O 能力。  2. 系统上下文 (System Context)本系统作为独立的 Agent 服务存在，向下连接业务数据库（MySQL），向外调用大模型服务（Aliyun Qwen）。系统边界清晰，通过 RESTful API 与外部客户端交互。   图：整体流程图   123456789101112131415161718192...</div></div></div></a><a class="pagination-related" href="/2025/12/22/SqlAgent%20V2%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/" title="SqlAgent V2 架构设计文档 (Hybrid RAG)"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-12-22</div><div class="info-item-2">SqlAgent V2 架构设计文档 (Hybrid RAG)</div></div><div class="info-2"><div class="info-item-1">1. 设计目标 (Design Goal)在 V1 版本跑通线性链路的基础上，V2 版本 (Hybrid RAG) 旨在解决大规模数据库场景下的 Context Window 瓶颈、语义理解不足 以及 跨语言检索 问题。  核心功能：构建 “Translation -&gt; Hybrid Search -&gt; Rerank” 的高精度检索漏斗。 架构验证：验证 Qdrant (Vector) + BM25 (Keyword) + DashScope Rerank 组合在 Text-to-SQL 场景下的召回效果。 非功能目标：在 500+ 张表规模下，实现 Recall@5 &gt; 95%，支持中文自然语言查询英文表结构。  2. 系统上下文 (System Context)V2 版本引入了 知识入库 (Ingestion) 离线流程，并在线上服务中集成了 Embedding Model 和 Rerank Model 两个外部原子能力。   图：V2 混合检索流程图   123456789101112131415161718192021222324252627282930...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Yuwumengmeng</div><div class="author-info-description">This is Yuwumengmeng's personal blog, sharing knowledge and experiences about technology and life.</div><div class="site-data"><a href="/archives/"><div class="headline">Articles</div><div class="length-num">3</div></a><a href="/tags/"><div class="headline">Tags</div><div class="length-num">9</div></a><a href="/categories/"><div class="headline">Categories</div><div class="length-num">1</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/yuwumengmeng"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/yuwumengmeng" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>Announcement</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>Contents</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E8%AE%BE%E8%AE%A1%E7%9B%AE%E6%A0%87-Design-Goal"><span class="toc-number">1.</span> <span class="toc-text">1. 设计目标 (Design Goal)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E7%B3%BB%E7%BB%9F%E4%B8%8A%E4%B8%8B%E6%96%87-System-Context"><span class="toc-number">2.</span> <span class="toc-text">2. 系统上下文 (System Context)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E6%A0%B8%E5%BF%83%E7%8A%B6%E6%80%81%E5%AE%9A%E4%B9%89-Agent-State-Definition"><span class="toc-number">3.</span> <span class="toc-text">3. 核心状态定义 (Agent State Definition)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E5%9B%BE%E7%BB%93%E6%9E%84%E6%8B%93%E6%89%91-Graph-Topology"><span class="toc-number">4.</span> <span class="toc-text">4. 图结构拓扑 (Graph Topology)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E8%BF%90%E8%A1%8C%E6%97%B6%E5%BA%8F-Runtime-Sequence"><span class="toc-number">5.</span> <span class="toc-text">5. 运行时序 (Runtime Sequence)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E5%86%B3%E7%AD%96-Key-Decisions"><span class="toc-number">6.</span> <span class="toc-text">6. 关键技术决策 (Key Decisions)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-%E4%B8%A4%E7%BA%A7%E7%BA%A0%E9%94%99%E7%AD%96%E7%95%A5-Two-Level-Correction"><span class="toc-number">6.1.</span> <span class="toc-text">6.1 两级纠错策略 (Two-Level Correction)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E5%BE%AA%E7%8E%AF%E6%8E%A7%E5%88%B6-Loop-Control"><span class="toc-number">6.2.</span> <span class="toc-text">6.2 循环控制 (Loop Control)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89-API-Interface"><span class="toc-number">7.</span> <span class="toc-text">7. 接口定义 (API Interface)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E5%BC%80%E5%8F%91%E8%AE%A1%E5%88%92-Implementation-Plan"><span class="toc-number">8.</span> <span class="toc-text">8. 开发计划 (Implementation Plan)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Phase-3-1-%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD-Infrastructure"><span class="toc-number">8.1.</span> <span class="toc-text">Phase 3.1: 基础设施 (Infrastructure)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Phase-3-2-%E8%8A%82%E7%82%B9%E5%BC%80%E5%8F%91-Node-Development"><span class="toc-number">8.2.</span> <span class="toc-text">Phase 3.2: 节点开发 (Node Development)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Phase-3-3-%E5%9B%BE%E7%BC%96%E6%8E%92-Graph-Orchestration"><span class="toc-number">8.3.</span> <span class="toc-text">Phase 3.3: 图编排 (Graph Orchestration)</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>Recent Posts</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/12/22/SqlAgent%20V3%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/" title="SqlAgent V3 架构设计文档 (Self-Correction)">SqlAgent V3 架构设计文档 (Self-Correction)</a><time datetime="2025-12-22T06:00:00.000Z" title="Created 2025-12-22 14:00:00">2025-12-22</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/12/22/SqlAgent%20V2%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/" title="SqlAgent V2 架构设计文档 (Hybrid RAG)">SqlAgent V2 架构设计文档 (Hybrid RAG)</a><time datetime="2025-12-22T02:00:00.000Z" title="Created 2025-12-22 10:00:00">2025-12-22</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/12/01/SqlAgent%20V1%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/" title="SqlAgent V1 架构设计文档">SqlAgent V1 架构设计文档</a><time datetime="2025-12-01T02:00:00.000Z" title="Created 2025-12-01 10:00:00">2025-12-01</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Yuwumengmeng</span><span class="framework-info"><span>Framework </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.1</a><span class="footer-separator">|</span><span>Theme </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="Reading Mode"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="Toggle Between Light and Dark Mode"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="Toggle Between Single-column and Double-column"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="Settings"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="Table of Contents"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="Back to Top"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.3"></script><script src="/js/main.js?v=5.5.3"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
