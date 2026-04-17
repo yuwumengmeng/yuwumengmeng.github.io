@@ -1,11 +1,11 @@
-# Hexo Configuration
+﻿# Hexo Configuration
 ## Docs: https://hexo.io/docs/configuration.html
 ## Source: https://github.com/hexojs/hexo/
 
 # Site
-title: Welcom to My Blog
-subtitle: 'a blog about technology and life'
-description: 'This is Yuwumengmeng''s personal blog, sharing knowledge and experiences about technology and life.'
+title: "Code Cosmos"
+subtitle: '在数据的算法海洋里，仰望星空与智能的边界'
+description: 'Focus on AI Agent, Data Engineering & System Architecture'
 keywords:
 author: Yuwumengmeng
 language: en

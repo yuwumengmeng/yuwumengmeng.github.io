@@ -56,17 +56,17 @@ social:
 favicon: /img/favicon.png
 
 avatar:
-  img: /img/butterfly-icon.png
+  img: https://images.unsplash.com/photo-1544256718-3bcf237f3974?auto=format&fit=crop&w=400&q=80
   effect: false
 
 # Disable all banner images
 disable_top_img: false
 
 # If the banner of page not setting, it will show the default_top_img
-default_top_img:
+default_top_img: https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1600&q=80
 
 # The banner image of index page
-index_img:
+index_img: https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1600&q=80
 
 # The banner image of archive page
 archive_img:
@@ -93,7 +93,7 @@ footer_img: false
 # Website Background
 # Can set it to color, image URL or an array containing colors and/or image URLs
 # If an array is provided, a random background will be selected from the array on each load
-background:
+background: '#f4f7f6'
 
 cover:
   # Disable the cover or not
@@ -149,7 +149,7 @@ index_top_img_height:
 
 # The subtitle on homepage
 subtitle:
-  enable: false
+  enable: true
   # Typewriter Effect
   effect: true
   # Customize typed.js
@@ -159,12 +159,16 @@ subtitle:
   # It will show the source first, then show the content of sub
   # Choose: false/1/2/3
   # false - disable the function
-  # 1 - hitokoto.cn
-  # 2 - https://api.aa1.cn/doc/yiyan.html
-  # 3 - jinrishici.com
   source: false
-  # If you close the typewriter effect, the subtitle will only show the first line of sub
+  # You can customize the sub
+  # e.g
+  # sub:
+  #   - a
+  #   - b
+  #   - c
   sub:
+    - "在数据的算法海洋里，仰望星空与智能的边界"
+    - "The quieter you become, the more you are able to hear."
 
 # Article layout on the homepage
 # 1: Cover on the left, info on the right
@@ -292,7 +296,7 @@ aside:
       link: https://github.com/yuwumengmeng
   card_announcement:
     enable: true
-    content: This is my Blog
+    content: "致力于探索 AI Agent 与大模型的落地实践，分享技术经验与生活见闻。"
   card_recent_post:
     enable: true
     # If set 0 will show all
@@ -821,8 +825,8 @@ beautify:
 font:
   global_font_size:
   code_font_size:
-  font_family:
-  code_font_family:
+  font_family: '"PingFang SC", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif'
+  code_font_family: '"Consolas", "Monaco", monospace'
 
 # Font settings for the site title and site subtitle
 blog_title_font:
