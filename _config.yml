@@ -3,17 +3,17 @@
 ## Source: https://github.com/hexojs/hexo/
 
 # Site
-title: Hexo
-subtitle: ''
-description: ''
+title: Welcom to My Blog
+subtitle: 'a blog about technology and life'
+description: 'This is Yuwumengmeng''s personal blog, sharing knowledge and experiences about technology and life.'
 keywords:
-author: John Doe
+author: Yuwumengmeng
 language: en
 timezone: ''
 
 # URL
 ## Set your site url here. For example, if you use GitHub Page, set url as 'https://username.github.io/project'
-url: http://example.com
+url: http://yuwumengmeng.github.io
 permalink: :year/:month/:day/:title/
 permalink_defaults:
 pretty_urls:
@@ -40,7 +40,7 @@ external_link:
   exclude: ''
 filename_case: 0
 render_drafts: false
-post_asset_folder: false
+post_asset_folder: true
 relative_link: false
 future: true
 syntax_highlighter: highlight.js
@@ -96,7 +96,7 @@ ignore:
 # Extensions
 ## Plugins: https://hexo.io/plugins/
 ## Themes: https://hexo.io/themes/
-theme: landscape
+theme: butterfly
 
 # Deployment
 ## Docs: https://hexo.io/docs/one-command-deployment
@@ -104,3 +104,20 @@ deploy:
   type: git
   repo: git@github.com:yuwumengmeng/yuwumengmeng.github.io.git
   branch: main
+
+mathjax:
+  every_page: true
+
+pandoc:
+  args: [
+    # I don't know why but mathjax won't work without hexo-filter-mathjax or --mathjax
+    '--mathjax',
+    # -smart: 不把引号渲染成带方向的引号。
+    # +backtick_code_blocks: 代码块
+    # -implicit_figures: 防止在图片后面将方括号里的东西作为caption。<https://github.com/wzpan/hexo-renderer-pandoc/issues/34>
+    # +gfm_auto_identifiers: 用github的方式生成header之类的identifier
+    # +intraword_underscores: 不把下划线用来强调。强调用星号。
+    # +hard_line_breaks: 两行之间就算没有额外的空行也显示成两行，而不是像Latex那样显示成一行。
+    # +autolink_bare_uris: Makes all absolute URIs into links, even when not surrounded by pointy braces <...>
+    '--from', 'markdown-smart+backtick_code_blocks-implicit_figures+gfm_auto_identifiers+intraword_underscores+hard_line_breaks+autolink_bare_uris',
+  ]
